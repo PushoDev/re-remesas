@@ -16,3 +16,4 @@ frontend/.env
 .vscode/
 .idea/
 .DS_Store
+.dev-logs/
