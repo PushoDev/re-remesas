@@ -6,7 +6,7 @@ from .models import Profile, User
 
 
 class UserCreationForm(AdminUserCreationForm):
-    """Create users by email; `username` is filled with the email."""
+    # Crear usuarios por email; `username` se rellena con el email.
 
     class Meta(AdminUserCreationForm.Meta):
         model = User
@@ -67,8 +67,8 @@ class UserAdmin(BaseUserAdmin):
         return obj.profile.membership_status
 
     def get_inline_instances(self, request, obj=None):
-        # On the "add" page the Profile is created by the post_save signal;
-        # showing the inline there would try to create a second one.
+        # Al crear un usuario, el perfil se crea mediante el signal `post_save`;
+        # mostrar el inline aquí intentaría crear un segundo.
         return super().get_inline_instances(request, obj) if obj else []
 
     def save_model(self, request, obj, form, change):

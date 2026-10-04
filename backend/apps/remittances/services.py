@@ -261,3 +261,61 @@ def cancel_remittance(remittance: Remittance, admin, note: str) -> Remittance:
     if payment.status == PaymentStatus.PENDING:
         settle_payment(payment.pk, succeeded=False, confirmed_by=admin)  # its handler is now a no-op
     return _lock(cancelled)
+
+
+def allowed_actions(remittance: Remittance) -> list[str]:
+    """The buttons an administrator should see for this remittance right now."""
+    actions = []
+    if remittance.status == Status.PENDING_PAYMENT and remittance.payment.provider == 'MANUAL':
+        actions.append('confirm_payment')  # gateway payments confirm themselves
+    if Status.COMPLETED in TRANSITIONS[remittance.status]:
+        actions.append('complete')
+    if Status.CANCELLED in TRANSITIONS[remittance.status]:
+        actions.append('cancel')
+    return actions
+
+
+# --- Payment proof (manual payments only) -----------------------------------------------------------
+
+class ProofNotAccepted(Exception):
+    """This remittance cannot receive a payment proof (not manual, or no longer waiting for payment)."""
+
+
+@transaction.atomic
+def submit_payment_proof(remittance: Remittance, *, reference: str = '', file=None) -> Remittance:
+    """The customer tells us how they paid so an administrator can verify it.
+
+    Only for manual methods that are still waiting. Sending again replaces the
+    previous file (only the latest proof is kept) and every submission is noted in
+    the history, which is what makes the remittance show up as "needs review".
+    """
+    locked = _lock(remittance)
+    if locked.payment.provider != 'MANUAL':
+        raise ProofNotAccepted('Los pagos en línea se confirman solos; no necesitan comprobante.')
+    if locked.status != Status.PENDING_PAYMENT or locked.payment.status != PaymentStatus.PENDING:
+        raise ProofNotAccepted('Esta remesa ya no está esperando el pago, así que no admite comprobante.')
+
+    old_file_name = locked.payment_proof.name if locked.payment_proof else ''
+    update_fields = ['updated_at']
+    if reference:
+        locked.payment_reference = reference
+        update_fields.append('payment_reference')
+    if file is not None:
+        locked.payment_proof = file
+        update_fields.append('payment_proof')
+    locked.save(update_fields=update_fields)
+
+    if file is not None and old_file_name and old_file_name != locked.payment_proof.name:
+        storage = locked.payment_proof.storage
+        transaction.on_commit(lambda: storage.delete(old_file_name))  # only once the new one is safely saved
+
+    parts = ['El cliente envió un comprobante de pago.']
+    if reference:
+        parts.append(f'Referencia: {reference}.')
+    if file is not None:
+        parts.append('Adjuntó un archivo.')
+    RemittanceStatusLog.objects.create(
+        remittance=locked, from_status=locked.status, to_status=locked.status, source=Source.CUSTOMER,
+        changed_by=locked.sender, note=' '.join(parts),
+    )
+    return locked
