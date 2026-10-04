@@ -8,7 +8,6 @@ from django.db.models import ProtectedError
 from apps.payments.models import Payment, PaymentMethod, PaymentPurpose
 from apps.users.models import User
 
-from . import services
 from .models import Remittance
 from .services import ALPHABET, generate_tracking_id, is_valid_tracking_id, normalize_tracking_id
 
@@ -71,8 +70,9 @@ class TestTrackingId:
         assert normalize_tracking_id('  rr-20261004-7kq2m ') == 'RR-20261004-7KQ2M'
         assert is_valid_tracking_id(normalize_tracking_id('rr-20261004-7kq2m'))
 
-    def test_module_exposes_no_database_dependency(self):
-        assert not hasattr(services, 'Remittance')  # generation is pure; uniqueness is the database's job
+    def test_generating_an_id_does_not_touch_the_database(self, django_assert_num_queries):
+        with django_assert_num_queries(0):  # uniqueness is the database's job, not the generator's
+            generate_tracking_id()
 
 
 class TestRemittanceModel:

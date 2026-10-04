@@ -134,3 +134,8 @@ PAYMENT_WEBHOOK_SECRET = env('PAYMENT_WEBHOOK_SECRET', default='dev-only-webhook
 # The simulated checkout (POST /api/payments/mock/<ref>/confirm/) only exists while this is on.
 # It defaults to DEBUG, so it is off in production unless explicitly enabled.
 PAYMENT_MOCK_ENABLED = env.bool('PAYMENT_MOCK_ENABLED', default=DEBUG)
+
+# Limits for a single remittance, in the currency sent. NOT defined by the specification:
+# they are an assumption of this implementation, kept configurable.
+REMITTANCE_MIN_AMOUNT = env('REMITTANCE_MIN_AMOUNT', default='1.00')
+REMITTANCE_MAX_AMOUNT = env('REMITTANCE_MAX_AMOUNT', default='10000.00')

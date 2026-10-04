@@ -14,4 +14,5 @@ urlpatterns = [
     path('api/', include('apps.exchange_rates.urls')),
     path('api/', include('apps.memberships.urls')),
     path('api/', include('apps.payments.urls')),
+    path('api/', include('apps.remittances.urls')),
 ]
