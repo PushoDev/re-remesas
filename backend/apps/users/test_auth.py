@@ -40,7 +40,9 @@ class TestLogin:
         response = login(client)
 
         assert response.status_code == 200
-        assert response.data['access'] and response.data['refresh']
+        assert response.data['access']
+        assert 'refresh' not in response.data
+        assert response.cookies['refresh_token'].value
 
     def test_login_normalizes_email(self, client, user):
         assert login(client, email='  ANA@Example.COM ').status_code == 200
@@ -70,23 +72,22 @@ class TestLogin:
 
 
 class TestRefresh:
-    def test_valid_refresh_returns_new_access(self, client, user):
-        refresh = login(client).data['refresh']
-        response = client.post(REFRESH, {'refresh': refresh}, format='json')
+    def test_valid_refresh_cookie_returns_new_access(self, client, user):
+        login(client)  # the test client keeps the refresh cookie
+        response = client.post(REFRESH)
 
         assert response.status_code == 200
         assert response.data['access']
 
-    def test_invalid_refresh_is_rejected(self, client):
-        response = client.post(REFRESH, {'refresh': 'no-es-un-token'}, format='json')
+    def test_invalid_refresh_cookie_is_rejected(self, client):
+        client.cookies['refresh_token'] = 'no-es-un-token'
 
-        assert response.status_code == 401
+        assert client.post(REFRESH).status_code == 401
 
     def test_access_token_cannot_be_used_as_refresh(self, client, user):
-        access = login(client).data['access']
-        response = client.post(REFRESH, {'refresh': access}, format='json')
+        client.cookies['refresh_token'] = login(client).data['access']
 
-        assert response.status_code == 401
+        assert client.post(REFRESH).status_code == 401
 
 
 class TestMe:

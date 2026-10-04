@@ -28,12 +28,15 @@ class TestRegisterSuccess:
         assert body['user']['is_staff'] is False
         assert body['user']['profile']['membership_status'] == 'FREE'
 
-    def test_returns_valid_jwt_tokens(self, client):
+    def test_returns_access_in_body_and_refresh_in_cookie(self, client):
         response = client.post(URL, VALID, format='json')
 
         user = User.objects.get(email='ana@example.com')
         assert AccessToken(response.data['access'])['user_id'] == str(user.pk)
-        assert response.data['refresh']
+        # The refresh token is never in the body: only in an httpOnly cookie.
+        assert 'refresh' not in response.data
+        cookie = response.cookies['refresh_token']
+        assert cookie.value and cookie['httponly']
 
     def test_password_is_hashed_and_never_returned(self, client):
         response = client.post(URL, VALID, format='json')
