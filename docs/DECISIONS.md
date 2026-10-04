@@ -213,3 +213,68 @@ acciones solo actúan sobre pagos manuales que siguen pendientes y pasan por
 `settle_payment`, con la misma garantía de una sola liquidación. Los pagos y las
 suscripciones son de solo lectura en el admin: cambian únicamente a través del
 flujo de pago.
+
+## 21. La remesa guarda una instantánea y el servidor manda
+
+Al crear una remesa se guarda, junto a ella, todo lo que importa del dinero:
+tasa base, margen aplicado, tasa efectiva, monto en CUP y si fue tarifa VIP.
+Cambiar o desactivar una tasa después **no altera** remesas existentes. El
+cliente solo decide monto, moneda, destinatario, método de entrega y medio de
+pago: cualquier tasa, monto en CUP, estado, ID, remitente o marca VIP que envíe
+se **ignora**, y todo se recalcula en el servidor con `convert()` (decisión 13).
+El navegador nunca calcula dinero: la calculadora muestra únicamente lo que
+devuelve `POST /api/remittances/quote/`, y la vista previa de administración
+(decisión 15) es solo orientativa.
+
+## 22. ID de seguimiento legible y no adivinable
+
+Formato `RR-YYYYMMDD-XXXXX`. El sufijo son 5 caracteres de un alfabeto de 32
+(sin `0/O/1/I`, para dictarlo sin confusiones) generados con `secrets`: unos 33
+millones de combinaciones por día, de modo que el ID de otra persona no se
+deduce del propio. Es único por restricción de base de datos; si dos remesas
+chocaran, la creación reintenta con otro ID dentro de un *savepoint* y, si no
+logra uno libre, falla limpiamente sin dejar datos a medias. El cliente nunca
+ve el `id` interno.
+
+## 23. Creación atómica y reacción mínima al pago
+
+Crear la remesa, su pago pendiente y el vínculo entre ambos ocurre en una sola
+transacción: si el proveedor de pago falla, no queda nada. Mientras no existe la
+máquina de estados completa, el pago confirmado marca la remesa como `PAID` y un
+pago fallido la `CANCELLED` (el cliente crea una nueva). Esa reacción vive en un
+manejador registrado en la capa de pagos (decisión 18), por lo que una
+confirmación repetida no la aplica dos veces.
+
+## 24. Aislamiento: lo ajeno no existe
+
+`GET /api/remittances/` y el detalle solo devuelven remesas del propio usuario.
+Pedir la de otra persona o una inexistente da **el mismo 404** con el mismo
+cuerpo, así que no se puede averiguar qué IDs existen; ni un administrador ve
+las ajenas por la API de cliente. El listado va paginado, con filtros por estado
+y búsqueda por parte del ID, y el número de consultas no crece con el historial.
+
+## 25. Supuestos y límites de la remesa (no vienen en la especificación)
+
+- Monto por remesa entre **1,00 y 10.000,00** de la moneda enviada
+  (`REMITTANCE_MIN_AMOUNT` / `REMITTANCE_MAX_AMOUNT`), con máximo 2 decimales.
+  Se rechaza la notación exponencial (`1e3`) y la coma en la API.
+- Teléfono del destinatario: **móvil cubano** (`+53` y 8 dígitos que empiezan por
+  5), normalizado a `+53XXXXXXXX`; la regla vive en un módulo común que reutilizan
+  las recargas.
+- Transferencia local: cuenta o tarjeta del destinatario de **12 a 20 dígitos**.
+  El dato que el método de entrega no usa no se guarda.
+- Medios de pago: los 6 de la historia más Zelle (que aparece en la verificación
+  de administración).
+
+**Limitaciones conocidas:** no hay clave de idempotencia para un doble envío del
+formulario (el botón se deshabilita mientras se envía); la cotización pública no
+tiene límite de peticiones; un pago fallido cancela la solicitud en lugar de
+permitir reintentarla.
+
+## 26. Redirecciones solo a rutas internas
+
+Tras pagar en la pasarela simulada, la aplicación vuelve a la página indicada en
+`?next=`. Como ese valor viaja en la URL no es de fiar: solo se acepta una ruta
+interna (empieza por una sola `/`, sin `\` ni caracteres de control); cualquier
+otra cosa (`https://…`, `//…`, `javascript:`) se descarta y se usa un destino
+seguro por defecto, evitando una redirección abierta.

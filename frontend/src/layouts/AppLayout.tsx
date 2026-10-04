@@ -29,6 +29,12 @@ export default function AppLayout() {
               <NavLink to="/" end className={navLinkClass}>
                 Inicio
               </NavLink>
+              <NavLink to="/remittances/new" className={navLinkClass}>
+                Enviar
+              </NavLink>
+              <NavLink to="/remittances" end className={navLinkClass}>
+                Mis remesas
+              </NavLink>
               <NavLink to="/profile" className={navLinkClass}>
                 Perfil
               </NavLink>

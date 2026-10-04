@@ -68,7 +68,7 @@ test.describe('session', () => {
   test('VIP: login, profile, reload keeps the session, logout closes it', async ({ page }) => {
     await loginAs(page, /Cliente VIP/)
     await expect(page.getByText('Sesión iniciada · vip@rere.test (VIP)')).toBeVisible()
-    await expect(page.getByText('Sesión:')).toContainText('vip@rere.test')
+    await expect(page.locator('header')).toContainText('vip@rere.test')
 
     await page.goto('/profile')
     await expect(page.getByRole('heading', { name: 'Mi perfil' })).toBeVisible()
@@ -89,7 +89,7 @@ test.describe('session', () => {
 
   test('the refresh token is not readable from JavaScript', async ({ page, context }) => {
     await loginAs(page, /Cliente VIP/)
-    await expect(page.getByText('Sesión:')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Mi perfil' })).toBeVisible()
 
     expect(await page.evaluate(() => document.cookie)).not.toContain('refresh_token')
     const cookie = (await context.cookies()).find((c) => c.name === 'refresh_token')
@@ -154,7 +154,7 @@ test.describe('register', () => {
     await page.getByRole('button', { name: 'Crear cuenta' }).click()
 
     await expect(page.getByText('Cuenta creada. ¡Bienvenido a Re & Re!')).toBeVisible()
-    await expect(page.getByText('Sesión:')).toContainText(email)
+    await expect(page.locator('header')).toContainText(email)
 
     await page.goto('/profile')
     await expect(page.getByText('Prueba', { exact: true })).toBeVisible()

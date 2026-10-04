@@ -1,10 +1,11 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { FlaskConical, Loader2 } from 'lucide-react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import ErrorAlert from '../components/ErrorAlert'
 import LoadingScreen from '../components/LoadingScreen'
 import Money from '../components/Money'
 import { parseApiError } from '../lib/apiErrors'
+import { safeInternalPath } from '../lib/redirect'
 import { paymentMethodLabel } from '../lib/paymentMethods'
 import { confirmMockPayment, getPayment } from '../services/membershipService'
 
@@ -17,15 +18,22 @@ const PURPOSE_LABEL = { MEMBERSHIP: 'Membresía VIP', REMITTANCE: 'Remesa', RECH
 export default function MockCheckoutPage() {
   const { reference = '' } = useParams()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
 
   const { data: payment, isPending, isError, error } = useQuery({
     queryKey: ['payment', reference],
     queryFn: () => getPayment(reference),
   })
 
+  // Where to go once settled: the caller may say (?next=), but only inside this app.
+  const fallback = payment?.purpose === 'REMITTANCE' ? '/remittances' : `/membership/result?payment=${reference}`
+  const destination = safeInternalPath(params.get('next'), fallback)
+  // Cancelling is not the same as finishing: go back to where the purchase started.
+  const cancelTo = safeInternalPath(params.get('next'), payment?.purpose === 'REMITTANCE' ? '/remittances' : '/membership')
+
   const settle = useMutation({
     mutationFn: (outcome: 'succeeded' | 'failed') => confirmMockPayment(reference, outcome),
-    onSuccess: () => navigate(`/membership/result?payment=${reference}`, { replace: true }),
+    onSuccess: () => navigate(destination, { replace: true }),
   })
 
   if (isPending) return <LoadingScreen />
@@ -34,14 +42,14 @@ export default function MockCheckoutPage() {
     return (
       <main className="mx-auto mt-16 max-w-md px-4">
         <ErrorAlert message={`No pudimos encontrar ese pago. ${parseApiError(error).message}`} />
-        <Link to="/membership" className="font-semibold text-blue-700 hover:underline">Volver a la membresía</Link>
+        <Link to="/" className="font-semibold text-blue-700 hover:underline">Volver al inicio</Link>
       </main>
     )
   }
 
   // Already settled (for instance the user pressed "back"): show the outcome instead.
   if (payment.status !== 'PENDING') {
-    return <Navigate to={`/membership/result?payment=${reference}`} replace />
+    return <Navigate to={destination} replace />
   }
 
   const apiError = settle.error ? parseApiError(settle.error) : null
@@ -84,7 +92,7 @@ export default function MockCheckoutPage() {
             >
               Simular un pago fallido
             </button>
-            <Link to="/membership" className="block text-center text-sm font-medium text-slate-600 hover:underline">
+            <Link to={cancelTo} className="block text-center text-sm font-medium text-slate-600 hover:underline">
               Cancelar y volver
             </Link>
           </div>

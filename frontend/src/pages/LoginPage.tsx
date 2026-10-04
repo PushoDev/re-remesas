@@ -25,7 +25,8 @@ const DEMO_PASSWORD = 'Demo12345'
 export default function LoginPage() {
   const { status, login } = useAuth()
   const location = useLocation()
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/'
+  const wanted = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from
+  const from = wanted?.pathname ? `${wanted.pathname}${wanted.search ?? ''}` : '/'
 
   const {
     register,

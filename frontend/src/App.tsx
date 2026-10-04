@@ -10,6 +10,9 @@ import MembershipPage from './pages/MembershipPage'
 import MembershipResultPage from './pages/MembershipResultPage'
 import MockCheckoutPage from './pages/MockCheckoutPage'
 import ProfilePage from './pages/ProfilePage'
+import RemittanceDetailPage from './pages/RemittanceDetailPage'
+import RemittanceListPage from './pages/RemittanceListPage'
+import RemittanceNewPage from './pages/RemittanceNewPage'
 import RegisterPage from './pages/RegisterPage'
 
 function App() {
@@ -26,6 +29,9 @@ function App() {
 
         <Route element={<AppLayout />}>
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/remittances" element={<RemittanceListPage />} />
+          <Route path="/remittances/new" element={<RemittanceNewPage />} />
+          <Route path="/remittances/:trackingId" element={<RemittanceDetailPage />} />
           <Route path="/membership" element={<MembershipPage />} />
           <Route path="/membership/result" element={<MembershipResultPage />} />
 
