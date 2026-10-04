@@ -57,5 +57,6 @@ Listo:
   Backend   -> https://re-re-api.test/api/health/   (o http://localhost:8001/api/health/)
 
 Logs: $LOG_DIR/backend.log  $LOG_DIR/frontend.log
-Para detener: kill \$(cat "$LOG_DIR/backend.pid") \$(cat "$LOG_DIR/frontend.pid")
+Para detener:   fuser -k 8001/tcp 5173/tcp
+Para reiniciar: fuser -k 8001/tcp 5173/tcp ; ./dev.sh
 EOF
