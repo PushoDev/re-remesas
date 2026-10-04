@@ -152,3 +152,64 @@ Nunca expone el margen VIP ni la tasa VIP a quien no es miembro. En el frontend
 la vista previa del formulario de administración usa aritmética entera
 (`BigInt`) con el mismo redondeo; es solo orientativa y nunca se usa para una
 transacción: el servidor es la autoridad.
+
+## 16. Capa de pagos con proveedores intercambiables (y qué es real)
+
+`apps/payments` define `Payment` (propósito, monto instantánea, método, estado)
+y la interfaz `PaymentProvider`. Un único archivo (`providers/registry.py`)
+decide qué proveedor atiende cada método de pago; el negocio nunca ramifica por
+proveedor. **No hay ninguna integración viva con una pasarela**, y no se finge:
+
+| Método | Lo atiende | Qué es |
+|---|---|---|
+| Stripe, PayPal, Mercado Pago, EnZona | `MockPaymentProvider` | Pasarela **simulada**: no se cobra nada; el cliente pasa por una página de pago de la propia app |
+| Wise, Zelle, Efectivo | `ManualPaymentProvider` | Se pagan fuera de la app; un administrador verifica el comprobante y confirma |
+
+Sustituir el simulado por Stripe (modo test) o por otra pasarela es escribir un
+proveedor y cambiar una línea del registro; no toca membresías, remesas ni
+recargas. Stripe real no se implementó por quedar fuera del alcance disponible.
+
+## 17. La confianza de un pago viene de la firma, no del navegador
+
+Solo un webhook verificado (o un administrador, en los métodos manuales) activa
+algo. Volver a la página tras pagar no activa nada; la pantalla de resultado
+consulta el estado real del pago a la API. El webhook es público (la pasarela no
+tiene sesión), así que se autentica únicamente por la firma HMAC-SHA256 del
+cuerpo, que se verifica antes de buscar o modificar nada. El checkout simulado
+construye el mismo evento firmado y pasa por el mismo manejador, de modo que el
+camino real queda ejercitado; solo existe con `PAYMENT_MOCK_ENABLED` (por
+defecto, solo en desarrollo) y solo para el dueño del pago. El precio se lee
+siempre del plan en el servidor.
+
+## 18. Un pago se liquida una sola vez
+
+`settle_payment` bloquea la fila del pago (`select_for_update`) y solo actúa si
+sigue `PENDING`: la primera confirmación lo pasa a `SUCCEEDED`/`FAILED` y ejecuta
+el manejador de su propósito; cualquier confirmación posterior se ignora. Un
+webhook reenviado no puede aplicar el efecto dos veces, un fallo tardío no
+deshace un pago cobrado y un éxito tardío no revive uno fallido. Si el manejador
+falla, la transacción se revierte y el pago sigue pendiente para reintentarse.
+Cada app (membresías ahora; remesas y recargas después) registra su manejador.
+
+## 19. Reglas de activación y extensión de la membresía
+
+- Sigue vigente: el periodo nuevo se suma **después** de la expiración actual.
+- Gratuita o vencida: empieza hoy (no se cuenta desde una fecha pasada).
+- VIP sin fecha de fin (concedido por un administrador): nunca se acorta.
+- Varias compras se acumulan.
+- La suscripción guarda una instantánea de la duración y del descuento de
+  recargas del plan; editar el plan después no altera compras anteriores.
+- La compra de un plan (`subscribe`) crea el pago y la suscripción
+  **pendientes**; la membresía no cambia hasta que el pago se confirma.
+
+El beneficio de las remesas no vive en el plan sino en el margen VIP de la tasa
+de cambio (decisión 13): hay una sola fuente de verdad para el margen.
+
+## 20. Pagos manuales resueltos desde el admin de Django
+
+Mientras no existe el panel de remesas, un administrador confirma o rechaza los
+pagos manuales con las acciones del admin de Django sobre `Payment`. Esas
+acciones solo actúan sobre pagos manuales que siguen pendientes y pasan por
+`settle_payment`, con la misma garantía de una sola liquidación. Los pagos y las
+suscripciones son de solo lectura en el admin: cambian únicamente a través del
+flujo de pago.
