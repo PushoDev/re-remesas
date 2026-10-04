@@ -109,3 +109,46 @@ campo correspondiente.
   desarrollo; los atajos de "cuentas de prueba" de la pantalla de login solo se
   renderizan en modo desarrollo (`import.meta.env.DEV`) y no existen en el build
   de producción.
+
+## 12. Tasas de cambio: una tabla administrada, no una API externa
+
+La spec habla de consultar "la API de tasas (ExchangeRate)". No hay proveedor ni
+credenciales, así que `ExchangeRate` es una entidad propia que el administrador
+mantiene (base, margen estándar y margen VIP por moneda). Si en el futuro se
+integra un proveedor externo, solo tendría que alimentar esa misma tabla: el
+resto del sistema consume el servicio `exchange_rates.services`, no la fuente.
+Los datos de demostración (`seed_demo_rates`) **no son tasas reales de mercado**;
+USD 700 es el ejemplo de la spec.
+
+## 13. Cálculo de la tasa efectiva y redondeo
+
+`tasa_efectiva = tasa_base × (100 − margen) / 100`; el margen VIP reemplaza al
+estándar para un miembro **vigente**. Todo en `Decimal`:
+
+- tasa efectiva a 4 decimales, `ROUND_HALF_UP`;
+- monto en CUP a 2 decimales, `ROUND_DOWN`: al cliente nunca se le promete más
+  que (tasa mostrada × monto).
+
+Hay un único punto de cálculo (`convert()`); remesas y cualquier otra cotización
+pasan por él. Las reglas de negocio viven también en la base de datos
+(`CheckConstraint`): tasa > 0, márgenes en [0, 100), margen VIP ≤ estándar, y
+una sola tasa activa por moneda.
+
+## 14. Historial y desactivación en lugar de borrado
+
+Cada alta o cambio de una tasa escribe una fila inmutable en
+`ExchangeRateHistory` (valores, autor y fecha) dentro de la misma transacción.
+`DELETE` en la API **desactiva** la tasa en vez de borrarla, para no perder la
+auditoría; una tasa desactivada puede reemplazarse por una nueva activa. Las
+remesas guardan una instantánea de la tasa usada, de modo que cambiar o
+desactivar una tasa no altera transacciones pasadas.
+
+## 15. Endpoint público de tasas: lo que ve quien pregunta
+
+`GET /api/exchange-rates/` devuelve la tasa **tal como la recibiría quien
+consulta** (estándar, o preferencial si es miembro vigente) y `Cache-Control:
+no-store` para que un cambio del administrador se vea en la siguiente petición.
+Nunca expone el margen VIP ni la tasa VIP a quien no es miembro. En el frontend
+la vista previa del formulario de administración usa aritmética entera
+(`BigInt`) con el mismo redondeo; es solo orientativa y nunca se usa para una
+transacción: el servidor es la autoridad.

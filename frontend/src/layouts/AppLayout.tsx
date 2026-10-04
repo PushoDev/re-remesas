@@ -32,6 +32,11 @@ export default function AppLayout() {
               <NavLink to="/profile" className={navLinkClass}>
                 Perfil
               </NavLink>
+              {user?.is_staff && (
+                <NavLink to="/admin" className={navLinkClass}>
+                  Administración
+                </NavLink>
+              )}
             </nav>
           </div>
 
