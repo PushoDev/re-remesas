@@ -49,6 +49,14 @@ class TestConfirmManualPayments:
         assert payment.status == PaymentStatus.SUCCEEDED
         assert user.profile.membership_status == 'VIP'
 
+    def test_it_records_which_administrator_confirmed(self, admin_client, plan):
+        _, payment = buy(plan, 'ZELLE')
+
+        run_action(admin_client, 'confirm_manual_payments', payment)
+
+        payment.refresh_from_db()
+        assert payment.confirmed_by.email == 'admin@example.com'
+
     def test_rejecting_leaves_the_user_free(self, admin_client, plan):
         user, payment = buy(plan, 'CASH')
 

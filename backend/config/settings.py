@@ -139,3 +139,9 @@ PAYMENT_MOCK_ENABLED = env.bool('PAYMENT_MOCK_ENABLED', default=DEBUG)
 # they are an assumption of this implementation, kept configurable.
 REMITTANCE_MIN_AMOUNT = env('REMITTANCE_MIN_AMOUNT', default='1.00')
 REMITTANCE_MAX_AMOUNT = env('REMITTANCE_MAX_AMOUNT', default='10000.00')
+
+# Payment proofs uploaded by customers. Private: there is NO public URL for MEDIA_ROOT;
+# files are only handed out through authenticated endpoints.
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = 'media/'
+PAYMENT_PROOF_MAX_BYTES = 5 * 1024 * 1024

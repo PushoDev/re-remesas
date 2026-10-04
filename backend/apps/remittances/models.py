@@ -1,9 +1,18 @@
+import uuid
+from pathlib import PurePath
+
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
 from apps.exchange_rates.models import Currency
 from apps.payments.models import PaymentMethod
+
+
+def proof_path(instance, filename):
+    """A random name under the remittance's folder: the customer's file name is not trusted or kept."""
+    extension = PurePath(filename).suffix.lower()
+    return f'payment_proofs/{instance.tracking_id}/{uuid.uuid4().hex}{extension}'
 
 
 class Remittance(models.Model):
@@ -47,6 +56,10 @@ class Remittance(models.Model):
     payment = models.OneToOneField('payments.Payment', on_delete=models.PROTECT, related_name='remittance')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING_PAYMENT)
 
+    # What the customer gives so an administrator can verify a manual payment.
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_proof = models.FileField(upload_to=proof_path, null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -69,3 +82,28 @@ class Remittance(models.Model):
 
     def __str__(self):
         return f'{self.tracking_id} {self.amount_sent} {self.currency} [{self.status}]'
+
+
+class RemittanceStatusLog(models.Model):
+    """Append-only trail of every state a remittance has been in, and who/what moved it."""
+
+    class Source(models.TextChoices):
+        CUSTOMER = 'CUSTOMER', 'Cliente'
+        PAYMENT = 'PAYMENT', 'Pago'
+        ADMIN = 'ADMIN', 'Administrador'
+
+    remittance = models.ForeignKey(Remittance, on_delete=models.CASCADE, related_name='status_log')
+    from_status = models.CharField(max_length=20, choices=Remittance.Status.choices, blank=True)  # blank = creation
+    to_status = models.CharField(max_length=20, choices=Remittance.Status.choices)
+    source = models.CharField(max_length=10, choices=Source.choices)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',
+    )
+    note = models.TextField(blank=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['changed_at', 'id']  # chronological: it is a timeline
+
+    def __str__(self):
+        return f'{self.remittance_id}: {self.from_status or "∅"} → {self.to_status}'

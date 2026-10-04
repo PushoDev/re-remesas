@@ -44,7 +44,7 @@ def register_handler(purpose: str, on_success, on_failure=None) -> None:
 
 
 @transaction.atomic
-def settle_payment(payment_id: int, succeeded: bool) -> SettleResult:
+def settle_payment(payment_id: int, succeeded: bool, confirmed_by=None) -> SettleResult:
     """Settle a payment once. The row is locked so concurrent calls serialize;
     if the handler fails, the whole thing rolls back and the payment stays PENDING."""
     payment = Payment.objects.select_for_update().get(pk=payment_id)
@@ -53,7 +53,8 @@ def settle_payment(payment_id: int, succeeded: bool) -> SettleResult:
 
     payment.status = PaymentStatus.SUCCEEDED if succeeded else PaymentStatus.FAILED
     payment.confirmed_at = timezone.now()
-    payment.save(update_fields=['status', 'confirmed_at', 'updated_at'])
+    payment.confirmed_by = confirmed_by  # who verified it, when a person did (manual methods)
+    payment.save(update_fields=['status', 'confirmed_at', 'confirmed_by', 'updated_at'])
 
     handler = _HANDLERS.get(payment.purpose)
     if handler:

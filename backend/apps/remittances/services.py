@@ -12,7 +12,10 @@ from apps.payments.models import Payment, PaymentPurpose
 from apps.payments.providers.base import PaymentSession
 from apps.payments.providers.registry import provider_for_method
 
-from .models import Remittance
+from apps.payments.models import PaymentStatus
+from apps.payments.services import settle_payment
+
+from .models import Remittance, RemittanceStatusLog
 
 # Letters and digits without the look-alikes (no 0/O, 1/I): easy to read out loud to support.
 ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -121,20 +124,140 @@ def create_remittance(user, *, amount: Decimal, currency: str, recipient_name: s
 
     payment.target_id = remittance.pk
     payment.save(update_fields=['external_reference', 'instructions', 'target_id', 'updated_at'])
+    RemittanceStatusLog.objects.create(
+        remittance=remittance, from_status='', to_status=remittance.status,
+        source=RemittanceStatusLog.Source.CUSTOMER, changed_by=user,
+    )
     return remittance, session
 
 
-# --- Reactions to the payment (registered in apps.py) -----------------------------------------
-# Kept deliberately small here; the full status machine with its audit log is HU-REM-02.
+# --- The state machine (HU-REM-02) --------------------------------------------------------------
+# One place decides which moves are legal. COMPLETED and CANCELLED are final.
 
-def mark_paid(payment: Payment) -> None:
-    Remittance.objects.filter(payment=payment, status=Remittance.Status.PENDING_PAYMENT).update(
-        status=Remittance.Status.PAID, updated_at=timezone.now(),
+Status = Remittance.Status
+Source = RemittanceStatusLog.Source
+
+TRANSITIONS: dict[str, frozenset[str]] = {
+    Status.PENDING_PAYMENT: frozenset({Status.PAID, Status.CANCELLED}),
+    Status.PAID: frozenset({Status.COMPLETED, Status.CANCELLED}),
+    Status.COMPLETED: frozenset(),
+    Status.CANCELLED: frozenset(),
+}
+
+
+class InvalidTransition(Exception):
+    """The requested move is not allowed from the remittance's current state."""
+
+    def __init__(self, current: str, wanted: str):
+        self.current, self.wanted = current, wanted
+        super().__init__(
+            f'No se puede pasar de «{Status(current).label}» a «{Status(wanted).label}».'
+            if wanted in Status.values else f'Estado no válido: {wanted}.'
+        )
+
+
+class NoteRequired(Exception):
+    """An administrator must say why a remittance is being cancelled."""
+
+
+class NotAManualPayment(Exception):
+    """Only payments settled by hand (Zelle, Wise, cash) are confirmed by an administrator."""
+
+
+def _lock(remittance: Remittance) -> Remittance:
+    # Only the remittance row ("self"): the payment is locked separately and first (see below).
+    return Remittance.objects.select_for_update(of=('self',)).select_related('payment').get(pk=remittance.pk)
+
+
+def _lock_payment_then_remittance(remittance: Remittance):
+    """Lock order is ALWAYS payment first, then remittance. A payment webhook already works
+    in that order (settle_payment locks the payment, then its handler touches the remittance);
+    an administrator action must do the same or the two could wait on each other forever."""
+    payment = Payment.objects.select_for_update().get(pk=remittance.payment_id)
+    return _lock(remittance), payment
+
+
+@transaction.atomic
+def change_status(remittance: Remittance, new_status: str, *, user=None, note: str = '',
+                  source: str = Source.ADMIN) -> Remittance:
+    """Move a remittance to `new_status` if the machine allows it, and record it.
+
+    The row is locked, so two people acting at once cannot both succeed. A
+    cancellation by an administrator needs a reason.
+    """
+    locked = _lock(remittance)
+    if new_status not in Status.values or new_status not in TRANSITIONS[locked.status]:
+        raise InvalidTransition(locked.status, new_status)
+
+    note = note.strip()
+    if new_status == Status.CANCELLED and source == Source.ADMIN and not note:
+        raise NoteRequired('Indica el motivo de la cancelación.')
+
+    previous = locked.status
+    locked.status = new_status
+    locked.save(update_fields=['status', 'updated_at'])
+    RemittanceStatusLog.objects.create(
+        remittance=locked, from_status=previous, to_status=new_status, source=source, changed_by=user, note=note,
     )
+    return locked
 
 
-def cancel_after_failed_payment(payment: Payment) -> None:
+# --- Reactions to the payment (registered in apps.py) -------------------------------------------
+
+def mark_paid(payment) -> None:
+    """The payment was confirmed (gateway webhook, or an administrator for manual methods)."""
+    remittance = Remittance.objects.select_for_update().filter(payment=payment).first()
+    if remittance is None:
+        return
+    if remittance.status == Status.PENDING_PAYMENT:
+        by_person = payment.confirmed_by is not None
+        change_status(
+            remittance, Status.PAID, user=payment.confirmed_by, source=Source.PAYMENT,
+            note='Pago verificado por un administrador.' if by_person else 'Pago confirmado.',
+        )
+    else:
+        # Money arrived for something that is no longer waiting for it (e.g. cancelled meanwhile).
+        # Do not move the state; leave a visible trace so a person handles it (refund by hand).
+        RemittanceStatusLog.objects.create(
+            remittance=remittance, from_status=remittance.status, to_status=remittance.status, source=Source.PAYMENT,
+            note=f'Se recibió el pago cuando la remesa ya estaba «{remittance.get_status_display()}»: '
+                 'requiere revisión y reembolso manual.',
+        )
+
+
+def cancel_after_failed_payment(payment) -> None:
     """A payment that failed ends the request; the customer can simply create a new one."""
-    Remittance.objects.filter(payment=payment, status=Remittance.Status.PENDING_PAYMENT).update(
-        status=Remittance.Status.CANCELLED, updated_at=timezone.now(),
-    )
+    remittance = Remittance.objects.select_for_update().filter(payment=payment).first()
+    if remittance is not None and remittance.status == Status.PENDING_PAYMENT:
+        change_status(remittance, Status.CANCELLED, source=Source.PAYMENT, note='El pago no se completó.')
+
+
+# --- What an administrator can do -----------------------------------------------------------------
+
+@transaction.atomic
+def confirm_manual_payment(remittance: Remittance, admin) -> Remittance:
+    """After checking the proof of a Zelle/Wise/cash payment: settle it, which marks the remittance PAID."""
+    locked, payment = _lock_payment_then_remittance(remittance)
+    if locked.status != Status.PENDING_PAYMENT:
+        raise InvalidTransition(locked.status, Status.PAID)
+    if payment.provider != 'MANUAL':
+        raise NotAManualPayment('Este pago se confirma solo, por la pasarela; un administrador no puede marcarlo.')
+    settle_payment(payment.pk, succeeded=True, confirmed_by=admin)
+    return _lock(locked)
+
+
+@transaction.atomic
+def complete_remittance(remittance: Remittance, admin, note: str = '') -> Remittance:
+    """The money was delivered in Cuba."""
+    return change_status(remittance, Status.COMPLETED, user=admin, note=note, source=Source.ADMIN)
+
+
+@transaction.atomic
+def cancel_remittance(remittance: Remittance, admin, note: str) -> Remittance:
+    """Cancel it, with a reason. A payment still pending is closed so it cannot be paid later.
+    If it had already been paid, the refund is manual (documented limitation)."""
+    _locked, payment = _lock_payment_then_remittance(remittance)
+    cancelled = change_status(remittance, Status.CANCELLED, user=admin, note=note, source=Source.ADMIN)
+    if payment.status == PaymentStatus.PENDING:
+        settle_payment(payment.pk, succeeded=False, confirmed_by=admin)  # its handler is now a no-op
+    return _lock(cancelled)

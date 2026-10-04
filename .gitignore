@@ -5,6 +5,7 @@ backend/**/__pycache__/
 backend/**/migrations/__pycache__/
 backend/db.sqlite3
 backend/.env
+backend/media/
 backend/*.pyc
 
 # Frontend

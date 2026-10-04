@@ -25,7 +25,7 @@ class PaymentAdmin(admin.ModelAdmin):
 
     def _settle(self, request, queryset, succeeded: bool):
         pending_manual = queryset.filter(status=PaymentStatus.PENDING, provider='MANUAL')
-        changed = sum(settle_payment(payment.pk, succeeded).changed for payment in pending_manual)
+        changed = sum(settle_payment(payment.pk, succeeded, confirmed_by=request.user).changed for payment in pending_manual)
         skipped = queryset.count() - changed
         self.message_user(request, f'{changed} pago(s) {"confirmado(s)" if succeeded else "rechazado(s)"}.')
         if skipped:
