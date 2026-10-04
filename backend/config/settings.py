@@ -126,3 +126,11 @@ REFRESH_COOKIE_PATH = '/api/auth/'
 REFRESH_COOKIE_SAMESITE = 'Lax'
 REFRESH_COOKIE_SECURE = env.bool('AUTH_COOKIE_SECURE', default=not DEBUG)
 CORS_ALLOW_CREDENTIALS = True
+
+# Shared secret used to sign/verify the mock gateway's webhooks (HMAC-SHA256).
+# The default is for local development only: set a real value in production.
+PAYMENT_WEBHOOK_SECRET = env('PAYMENT_WEBHOOK_SECRET', default='dev-only-webhook-secret')
+
+# The simulated checkout (POST /api/payments/mock/<ref>/confirm/) only exists while this is on.
+# It defaults to DEBUG, so it is off in production unless explicitly enabled.
+PAYMENT_MOCK_ENABLED = env.bool('PAYMENT_MOCK_ENABLED', default=DEBUG)
