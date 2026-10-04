@@ -31,3 +31,12 @@ export async function getRemittance(trackingId: string): Promise<RemittanceDetai
   const { data } = await apiClient.get<RemittanceDetail>(`/remittances/${encodeURIComponent(trackingId)}/`)
   return data
 }
+
+/** Sends the reference and/or the file of a manual payment (multipart). The server validates the file's real content. */
+export async function submitPaymentProof(trackingId: string, proof: { reference: string; file: File | null }): Promise<RemittanceDetail> {
+  const body = new FormData()
+  if (proof.reference.trim()) body.append('reference', proof.reference.trim())
+  if (proof.file) body.append('file', proof.file)
+  const { data } = await apiClient.post<RemittanceDetail>(`/remittances/${encodeURIComponent(trackingId)}/payment-proof/`, body)
+  return data
+}

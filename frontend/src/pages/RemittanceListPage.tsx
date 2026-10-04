@@ -39,6 +39,7 @@ export default function RemittanceListPage() {
     queryKey: ['remittances', status, search, page],
     queryFn: () => listRemittances({ status: status || undefined, search: search || undefined, page }),
     placeholderData: keepPreviousData,
+    refetchInterval: 15_000, // states change when an administrator acts
   })
 
   const onSearch = (event: FormEvent) => {

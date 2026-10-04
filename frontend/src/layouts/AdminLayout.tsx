@@ -12,6 +12,12 @@ export default function AdminLayout() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Administración</h1>
         <nav aria-label="Administración" className="mt-4 flex gap-6 border-b border-slate-200">
+          <NavLink to="/admin" end className={tabClass}>
+            Resumen
+          </NavLink>
+          <NavLink to="/admin/remittances" className={tabClass}>
+            Remesas
+          </NavLink>
           <NavLink to="/admin/exchange-rates" className={tabClass}>
             Tasas de cambio
           </NavLink>

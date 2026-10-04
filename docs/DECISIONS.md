@@ -278,3 +278,75 @@ Tras pagar en la pasarela simulada, la aplicación vuelve a la página indicada 
 interna (empieza por una sola `/`, sin `\` ni caracteres de control); cualquier
 otra cosa (`https://…`, `//…`, `javascript:`) se descarta y se usa un destino
 seguro por defecto, evitando una redirección abierta.
+
+## 27. Máquina de estados de la remesa y bitácora inmutable
+
+Un único lugar (`change_status`) decide qué movimientos son legales, con la
+tabla de la especificación: `PENDING_PAYMENT → PAID | CANCELLED` y
+`PAID → COMPLETED | CANCELLED`; `COMPLETED` y `CANCELLED` son finales. Cualquier
+otro cambio se rechaza con un mensaje claro. Cada cambio escribe una entrada en
+`RemittanceStatusLog` (estado anterior y nuevo, **fuente** —cliente, pago o
+administrador—, quién, nota y fecha), que nunca se edita ni se borra; la creación
+es la primera entrada. Una cancelación hecha por un administrador **exige un
+motivo**. La fila se bloquea mientras se cambia, de modo que dos personas actuando
+a la vez no pueden salir ambas bien.
+
+## 28. Quién confirma qué: la pasarela se confirma sola
+
+- Un pago por **pasarela** (simulada) lo confirma el propio webhook (decisión 17);
+  un administrador **no puede marcarlo como pagado a mano**, para que nadie "cobre"
+  algo que no se pagó.
+- Un pago **manual** (Zelle, Wise, efectivo) lo confirma un administrador tras
+  revisar el comprobante; queda registrado qué administrador lo hizo
+  (`Payment.confirmed_by`).
+- Cancelar una remesa cierra su pago pendiente, así un aviso tardío de la pasarela
+  no la revive. Si el dinero llega para una remesa ya cancelada, el estado no se
+  mueve pero se deja una **nota visible** de que requiere revisión y reembolso
+  manual.
+- El servidor indica en cada detalle qué acciones son posibles ahora
+  (`allowed_actions`) y la pantalla pinta solo esos botones.
+
+## 29. Orden de bloqueo: primero el pago, luego la remesa
+
+Un webhook liquida el pago (bloqueándolo) y su manejador toca después la remesa;
+las acciones del administrador siguen **el mismo orden**. Con un orden único es
+imposible que un administrador y una pasarela actuando a la vez se esperen
+mutuamente (interbloqueo).
+
+## 30. Comprobantes de pago: archivos privados validados por su contenido
+
+El cliente puede enviar una referencia y/o un archivo (solo en pagos manuales y
+mientras la remesa espera el pago).
+
+- Solo **JPG, PNG o PDF** de hasta **5 MB**, y se comprueba el **contenido real**
+  (la firma del archivo), no el nombre: un ejecutable renombrado `.png` se rechaza.
+  El cliente repite estas comprobaciones antes de subir, solo por comodidad.
+- Se guarda con un **nombre aleatorio** en una carpeta privada. **No existe URL
+  pública**: el administrador lo descarga con una petición autenticada, con
+  `nosniff` y `private, no-store`, y la pantalla lo muestra desde memoria.
+- Reenviar reemplaza el archivo y borra el anterior; cada envío queda en la bitácora.
+- Al cliente se le muestra una **línea de tiempo segura**: estados y fechas, sin
+  notas internas ni el correo de quien actuó.
+
+## 31. Aviso al cliente por actualización periódica, no por WebSockets
+
+La especificación pide notificar el cambio de estado "o actualizar la visualización".
+La página de seguimiento se refresca sola cada 10 s mientras la remesa pueda cambiar
+(la lista cada 15 s y el panel de administración cada 20 s) y muestra un aviso al
+detectar un cambio. Se descartan WebSockets o *server-sent events* por
+sobre-ingeniería para el alcance de la prueba. **Limitación:** hay hasta unos
+segundos de retraso y no se envían correos ni SMS.
+
+## 32. API y panel de administración
+
+La administración usa el **ID de seguimiento** (no el `id` interno) y solo la
+pueden usar usuarios `is_staff`. La bandeja admite filtro por los 4 estados,
+búsqueda (ID, correo del remitente, nombre o teléfono del destinatario), orden y
+paginación, con un número constante de consultas. El resumen del panel incluye, además
+de los totales por estado, **«por revisar»**: pagos manuales aún pendientes en los
+que el cliente ya envió referencia o archivo, que es lo que realmente espera a un
+administrador.
+
+**Limitaciones conocidas:** el reembolso de una remesa cancelada tras pagarse es
+manual; solo se conserva el último comprobante enviado; los archivos no pasan por
+un antivirus.

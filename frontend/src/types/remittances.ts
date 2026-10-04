@@ -61,8 +61,21 @@ export interface Remittance {
   updated_at: string
 }
 
+/** One step of the timeline the customer sees: states and when, never internal notes or who acted. */
+export interface CustomerStatusEntry {
+  from_status: RemittanceStatus | ''
+  to_status: RemittanceStatus
+  to_status_display: string
+  changed_at: string
+  /** false = an annotation (e.g. the customer sent a proof), not a change of state. */
+  event: boolean
+}
+
 export interface RemittanceDetail extends Remittance {
   payment: Payment
+  payment_reference: string
+  has_proof_file: boolean
+  status_log: CustomerStatusEntry[]
 }
 
 export interface CreateRemittanceResult {

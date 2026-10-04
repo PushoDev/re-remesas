@@ -1,8 +1,11 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import AdminRoute from './components/AdminRoute'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminLayout from './layouts/AdminLayout'
 import AppLayout from './layouts/AppLayout'
+import AdminOverviewPage from './pages/admin/AdminOverviewPage'
+import AdminRemittanceDetailPage from './pages/admin/AdminRemittanceDetailPage'
+import AdminRemittancesPage from './pages/admin/AdminRemittancesPage'
 import ExchangeRatesPage from './pages/admin/ExchangeRatesPage'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
@@ -38,7 +41,9 @@ function App() {
           {/* Administrators only */}
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="exchange-rates" replace />} />
+              <Route index element={<AdminOverviewPage />} />
+              <Route path="remittances" element={<AdminRemittancesPage />} />
+              <Route path="remittances/:trackingId" element={<AdminRemittanceDetailPage />} />
               <Route path="exchange-rates" element={<ExchangeRatesPage />} />
             </Route>
           </Route>

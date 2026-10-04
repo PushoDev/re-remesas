@@ -1,11 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
-import { BadgeCheck, CheckCircle2, Clock, CreditCard, Loader2, XCircle } from 'lucide-react'
+import { BadgeCheck, CheckCircle2, Clock, CreditCard, Info, Loader2, XCircle } from 'lucide-react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import CopyButton from '../components/CopyButton'
 import Money from '../components/Money'
+import PaymentProofForm from '../components/remittances/PaymentProofForm'
 import StatusBadge from '../components/remittances/StatusBadge'
+import Timeline from '../components/Timeline'
+import { useStatusChangeNotice } from '../hooks/useStatusChangeNotice'
 import { parseApiError } from '../lib/apiErrors'
 import { formatDecimal } from '../lib/decimal'
+import { customerTimeline, nextStepText } from '../lib/remittanceTimeline'
 import { getRemittance } from '../services/remittanceService'
 import type { RemittanceDetail } from '../types/remittances'
 
@@ -46,10 +50,13 @@ function PaymentBlock({ remittance }: { remittance: RemittanceDetail }) {
         </div>
       )}
       {payment.status === 'PENDING' && payment.requires_manual_confirmation && (
-        <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-          <p className="font-medium">Pago en revisión</p>
-          <p className="mt-1">{payment.instructions}</p>
-        </div>
+        <>
+          <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-medium">{remittance.payment_reference || remittance.has_proof_file ? 'Pago en revisión' : 'Falta tu pago y su comprobante'}</p>
+            <p className="mt-1">{payment.instructions}</p>
+          </div>
+          {remittance.status === 'PENDING_PAYMENT' && <PaymentProofForm remittance={remittance} />}
+        </>
       )}
     </section>
   )
@@ -70,6 +77,8 @@ export default function RemittanceDetailPage() {
       return status === 'COMPLETED' || status === 'CANCELLED' ? false : REFRESH_MS
     },
   })
+
+  useStatusChangeNotice(remittance?.status, remittance?.status_display)
 
   if (isPending) {
     return (
@@ -111,6 +120,11 @@ export default function RemittanceDetailPage() {
       </header>
       <p className="text-sm text-slate-500">Creada el {dateTime.format(new Date(remittance.created_at))}</p>
 
+      <p className="flex items-start gap-2 rounded-xl bg-blue-50 p-3 text-sm text-blue-900">
+        <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+        <span><strong>Qué sigue:</strong> {nextStepText(remittance.status, remittance.payment.requires_manual_confirmation)}</span>
+      </p>
+
       <PaymentBlock remittance={remittance} />
 
       <section aria-labelledby="money-title" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -144,6 +158,14 @@ export default function RemittanceDetailPage() {
           <dt className="text-slate-600">{cash ? 'Dirección' : 'Cuenta'}</dt>
           <dd className="break-words text-slate-900">{cash ? remittance.recipient_address : remittance.recipient_account}</dd>
         </dl>
+      </section>
+
+      <section aria-labelledby="timeline-title" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 id="timeline-title" className="mb-4 text-base font-semibold text-slate-900">Seguimiento</h2>
+        <Timeline label="Seguimiento de tu remesa" items={customerTimeline(remittance.status_log)} />
+        {remittance.status !== 'COMPLETED' && remittance.status !== 'CANCELLED' && (
+          <p className="mt-4 text-xs text-slate-500">Esta página se actualiza sola y te avisa si cambia el estado.</p>
+        )}
       </section>
 
       <Link to="/remittances" className="inline-block text-sm font-semibold text-blue-700 hover:underline">← Volver a mis remesas</Link>
