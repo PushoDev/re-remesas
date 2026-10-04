@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { BadgeCheck, CalendarClock, ShieldCheck, Sparkles } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { parseApiError } from '../lib/apiErrors'
 import { describeMembership, formatDate, formatDaysLeft } from '../lib/membership'
@@ -58,7 +59,11 @@ function MembershipCard({ user }: { user: User }) {
         <Sparkles className="mt-0.5 size-5 shrink-0" aria-hidden />
         <p>
           Con la membresía <strong>VIP</strong> obtienes mejores tasas de cambio en tus remesas y descuentos en las
-          recargas telefónicas. Muy pronto podrás suscribirte desde aquí.
+          recargas telefónicas.{' '}
+          <Link to="/membership" className="font-semibold underline">
+            Ver los planes
+          </Link>
+          .
         </p>
       </div>
     </section>
