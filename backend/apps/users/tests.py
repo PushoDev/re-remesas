@@ -80,3 +80,45 @@ class TestSeedDemoUsers:
         assert User.objects.get(email='cliente@rere.test').profile.membership_status == Profile.FREE
         assert User.objects.get(email='vip@rere.test').profile.membership_status == Profile.VIP
         assert User.objects.get(email='vip.vencido@rere.test').profile.membership_status == Profile.FREE
+
+
+class TestPasswordRules:
+    """HU-AUTH-01: mínimo 8 caracteres, con letras y números."""
+
+    @staticmethod
+    def codes(password):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+
+        try:
+            validate_password(password)
+        except ValidationError as exc:
+            return {error.code for error in exc.error_list}
+        return set()
+
+    def test_valid_password_is_accepted(self):
+        assert self.codes('Tr3sPatos88x') == set()
+
+    def test_only_letters_is_rejected(self):
+        assert 'password_no_digit' in self.codes('SoloLetrasAqui')
+
+    def test_only_digits_is_rejected(self):
+        assert 'password_no_letter' in self.codes('48273650192')
+
+    def test_shorter_than_8_is_rejected(self):
+        assert 'password_too_short' in self.codes('Ab1xyz')
+
+    def test_common_password_is_rejected(self):
+        assert 'password_too_common' in self.codes('password123')
+
+    def test_unicode_letters_count_as_letters(self):
+        assert self.codes('Contraseña2026') == set()
+
+    def test_error_messages_are_in_spanish(self):
+        from django.core.exceptions import ValidationError
+        from apps.users.validators import LetterAndDigitPasswordValidator
+
+        with pytest.raises(ValidationError) as exc:
+            LetterAndDigitPasswordValidator().validate('!!!!!!!!')
+        messages = ' '.join(exc.value.messages)
+        assert 'letra' in messages and 'número' in messages
