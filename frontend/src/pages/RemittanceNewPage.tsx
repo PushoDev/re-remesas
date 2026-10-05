@@ -27,7 +27,10 @@ export default function RemittanceNewPage() {
   const [recipient, setRecipient] = useState<RecipientValues | undefined>(undefined)
   const [method, setMethod] = useState<PaymentMethodCode>('STRIPE')
 
-  useEffect(() => window.scrollTo(0, 0), [step])
+  // Braces on purpose: browsers now return a Promise from scrollTo, and an effect must not return one.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [step])
 
   const create = useMutation({
     mutationFn: createRemittance,
