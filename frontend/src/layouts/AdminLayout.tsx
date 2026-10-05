@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
-  `border-b-2 px-1 pb-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+  `shrink-0 whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
     isActive ? 'border-blue-700 text-blue-800' : 'border-transparent text-slate-500 hover:text-slate-800'
   }`
 
@@ -11,7 +11,7 @@ export default function AdminLayout() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Administración</h1>
-        <nav aria-label="Administración" className="mt-4 flex gap-6 border-b border-slate-200">
+        <nav aria-label="Administración" className="mt-4 flex gap-6 overflow-x-auto border-b border-slate-200">
           <NavLink to="/admin" end className={tabClass}>
             Resumen
           </NavLink>
