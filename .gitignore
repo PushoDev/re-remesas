@@ -5,6 +5,7 @@ backend/**/__pycache__/
 backend/**/migrations/__pycache__/
 backend/db.sqlite3
 backend/.env
+backend/media/
 backend/*.pyc
 
 # Frontend
@@ -16,3 +17,7 @@ frontend/.env
 .vscode/
 .idea/
 .DS_Store
+.dev-logs/
+
+# Archivos temporales que crea el sistema de archivos (NTFS/FUSE) al borrar algo que sigue abierto
+.fuse_hidden*

@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'apps.users',
     'apps.memberships',
@@ -83,6 +84,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 8}},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {'NAME': 'apps.users.validators.LetterAndDigitPasswordValidator'},
 ]
 
 LANGUAGE_CODE = 'en-us'
@@ -111,6 +113,35 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+
+# The refresh token travels only in an httpOnly cookie (never in a JSON body or
+# readable by JS). The cookie is only sent to /api/auth/ and, with SameSite=Lax,
+# only between origins of the same site (localhost:5173 -> localhost:8001).
+REFRESH_COOKIE_NAME = 'refresh_token'
+REFRESH_COOKIE_PATH = '/api/auth/'
+REFRESH_COOKIE_SAMESITE = 'Lax'
+REFRESH_COOKIE_SECURE = env.bool('AUTH_COOKIE_SECURE', default=not DEBUG)
+CORS_ALLOW_CREDENTIALS = True
+
+# Shared secret used to sign/verify the mock gateway's webhooks (HMAC-SHA256).
+# The default is for local development only: set a real value in production.
+PAYMENT_WEBHOOK_SECRET = env('PAYMENT_WEBHOOK_SECRET', default='dev-only-webhook-secret')
+
+# The simulated checkout (POST /api/payments/mock/<ref>/confirm/) only exists while this is on.
+# It defaults to DEBUG, so it is off in production unless explicitly enabled.
+PAYMENT_MOCK_ENABLED = env.bool('PAYMENT_MOCK_ENABLED', default=DEBUG)
+
+# Limits for a single remittance, in the currency sent. NOT defined by the specification:
+# they are an assumption of this implementation, kept configurable.
+REMITTANCE_MIN_AMOUNT = env('REMITTANCE_MIN_AMOUNT', default='1.00')
+REMITTANCE_MAX_AMOUNT = env('REMITTANCE_MAX_AMOUNT', default='10000.00')
+
+# Payment proofs uploaded by customers. Private: there is NO public URL for MEDIA_ROOT;
+# files are only handed out through authenticated endpoints.
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = 'media/'
+PAYMENT_PROOF_MAX_BYTES = 5 * 1024 * 1024
