@@ -8,7 +8,7 @@ import Money from '../components/Money'
 import RechargeStatusBadge from '../components/recharges/RechargeStatusBadge'
 import { parseApiError } from '../lib/apiErrors'
 import { trimDecimal } from '../lib/decimal'
-import { FINAL_STATUSES, discountAmount, outcomeMessage } from '../lib/recharges'
+import { FINAL_STATUSES, discountAmount, formatPhone, outcomeMessage } from '../lib/recharges'
 import { getRecharge } from '../services/rechargeService'
 import type { RechargeOrderDetail } from '../types/recharges'
 
@@ -113,7 +113,7 @@ export default function RechargeDetailPage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-slate-600">Recarga para</p>
-          <p className="mt-1 text-2xl font-bold tracking-wide text-slate-900 tabular-nums">{order.phone_number.replace(/^\+53/, '+53 ')}</p>
+          <p className="mt-1 text-2xl font-bold tracking-wide text-slate-900 tabular-nums">{formatPhone(order.phone_number)}</p>
         </div>
         <RechargeStatusBadge status={order.status} label={order.status_display} />
       </header>

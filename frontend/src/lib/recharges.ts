@@ -28,6 +28,12 @@ export function contactToInput(phone: string): string {
   return digits.length === 8 ? `${digits.slice(0, 4)} ${digits.slice(4)}` : digits
 }
 
+/** "+5351234567" -> "+53 5123 4567": how a number is shown everywhere. Anything that is not 8 digits after +53 is left as is. */
+export function formatPhone(phone: string): string {
+  const match = /^\+53(\d{4})(\d{4})$/.exec(phone)
+  return match ? `+53 ${match[1]} ${match[2]}` : phone
+}
+
 export const FINAL_STATUSES: RechargeStatus[] = ['SUCCESS', 'FAILED']
 
 /** What happened, in words for the customer. Never mentions how the provider is implemented. */

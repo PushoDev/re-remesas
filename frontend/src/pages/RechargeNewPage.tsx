@@ -9,7 +9,7 @@ import PaymentMethodPicker from '../components/PaymentMethodPicker'
 import { parseApiError } from '../lib/apiErrors'
 import { trimDecimal } from '../lib/decimal'
 import { inputClass, primaryButtonClass } from '../lib/formStyles'
-import { contactToInput, groupByKind, phoneFromInput } from '../lib/recharges'
+import { contactToInput, formatPhone, groupByKind, phoneFromInput } from '../lib/recharges'
 import { createRecharge, listPackages, listRecentContacts, quoteRecharge } from '../services/rechargeService'
 import type { PaymentMethodCode } from '../types/memberships'
 import type { CatalogPackage } from '../types/recharges'
@@ -158,7 +158,7 @@ export default function RechargeNewPage() {
                       phone === contact.phone_number ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    {contact.phone_number.replace(/^\+53/, '+53 ')}
+                    {formatPhone(contact.phone_number)}
                   </button>
                 </li>
               ))}
@@ -223,7 +223,7 @@ export default function RechargeNewPage() {
               <dt className="text-slate-600">Paquete</dt>
               <dd className="text-right font-medium text-slate-900">{quote.data.package.name}</dd>
               <dt className="text-slate-600">Número</dt>
-              <dd className="text-right tabular-nums text-slate-900">{quote.data.phone_number.replace(/^\+53/, '+53 ')}</dd>
+              <dd className="text-right tabular-nums text-slate-900">{formatPhone(quote.data.phone_number)}</dd>
               <dt className="text-slate-600">Precio</dt>
               <dd className="text-right"><Money amount={quote.data.price_base} currency={quote.data.currency} /></dd>
               {discount && (

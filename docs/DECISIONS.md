@@ -350,3 +350,125 @@ administrador.
 **Limitaciones conocidas:** el reembolso de una remesa cancelada tras pagarse es
 manual; solo se conserva el último comprobante enviado; los archivos no pasan por
 un antivirus.
+
+## 33. Recargas: solo móviles cubanos, con un único validador
+
+Una recarga solo se acepta para un **móvil cubano**: `+53` seguido de 8 dígitos
+que empiezan por 5. Los teléfonos fijos no se recargan y se rechazan con un
+mensaje claro. Se admiten las formas habituales de escribirlo (`5123 4567`,
+`+53 5123 4567`, `53-51234567`) y siempre se guarda normalizado como
+`+53XXXXXXXX`. Es **el mismo validador** (`apps/common/phone.py`) que usan los
+destinatarios de las remesas, para que no existan dos reglas distintas; el
+frontend conserva una copia solo para dar respuesta inmediata, y quien decide es
+el servidor. **Supuesto:** la regla del prefijo 5 es la de los móviles cubanos
+actuales; no viene en la especificación.
+
+## 34. Catálogo y promociones: las decide el servidor y solo informan
+
+Cada paquete (saldo, datos, voz o combinado) tiene su precio en USD. La
+**promoción vigente la decide el servidor**, no el navegador: una promoción está
+vigente si está activa y la hora actual cae dentro de su ventana (el inicio
+cuenta, el fin no). La API de paquetes la entrega como `active_promotion` y la
+pantalla solo la dibuja; el catálogo no se guarda en caché porque las promociones
+empiezan y terminan con el reloj.
+
+- Si varias aplican a un mismo paquete, gana la hecha **para ese paquete** sobre
+  la general y, entre iguales, la que **termina antes**. Es una regla propia, la
+  especificación no la define.
+- Una promoción **no cambia lo que se cobra**: es una bonificación para quien
+  recibe la recarga. Se guarda una copia de la vigente en la orden (instantánea).
+
+## 35. Precio de una recarga y descuento VIP
+
+El precio lo calcula siempre el servidor, en `Decimal`: la cotización es
+informativa y crear la orden la repite, así que ningún importe, estado ni
+propietario enviado por el cliente llega a la base de datos. El cliente solo
+decide teléfono, paquete y medio de pago.
+
+- **Quién tiene descuento:** solo un VIP real (membresía activa y no vencida) con
+  una **suscripción en curso**. Se aplica el porcentaje que quedó guardado al
+  comprarla, no el actual del plan, de modo que editar un plan no altera lo ya
+  vendido. Si hay varias en curso a la vez, aplica la mejor; una que empieza más
+  adelante no cuenta todavía.
+- **VIP concedido a mano sin suscripción:** paga el precio completo, porque no hay
+  plan del que tomar el porcentaje.
+- **Redondeo:** el descuento se redondea a céntimos, mitad hacia arriba. El total
+  nunca supera el precio base ni baja de 0,01, y la base de datos lo exige con
+  restricciones.
+- La orden guarda precio base, porcentaje aplicado, total y moneda; un cambio
+  posterior de precios no la altera.
+
+## 36. Proveedor de recargas simulado
+
+No hay contrato ni credenciales de ETECSA, y **no se finge una integración
+viva**. Las recargas se piden a un `RechargeProvider` (una interfaz con una sola
+función) que un único archivo (`providers/registry.py`) resuelve; sustituirlo por
+uno real es escribir esa clase y cambiar una línea. Hoy solo existe el simulado:
+
+| Qué | Cómo se resuelve | Qué es |
+|---|---|---|
+| Recarga a un móvil de ETECSA | `MockRechargeProvider` | **Simulado**: no se envía nada a nadie; responde según el último dígito del teléfono |
+
+**Reglas del simulado (reproducibles a propósito):** el último dígito `0` →
+**Fallida**; `1` → **Procesando** (queda sin completarse); cualquier otro →
+**Exitosa**. Siempre devuelve una referencia propia (`RC-…`) y un mensaje en
+español. Esto permite probar los tres caminos a voluntad.
+
+Al cliente **no se le dice** que el proveedor es simulado: ve el mismo mensaje que
+daría uno real. La divulgación es esta documentación y la tabla de integraciones
+del README, no la interfaz.
+
+## 37. Ciclo de una orden de recarga y una sola llamada al proveedor
+
+Estados: `PENDING_PAYMENT → PROCESSING | SUCCESS | FAILED`. La orden nace con su
+pago pendiente y **el proveedor no se llama al crearla**; solo se le pide la
+recarga cuando el pago se confirma (por el webhook de la pasarela o por un
+administrador en un pago manual).
+
+- La orden se **bloquea** y solo se envía si sigue pendiente de pago: confirmar el
+  mismo pago dos veces, o repetir el mismo webhook, pide la recarga **una sola
+  vez**.
+- Un pago que falla deja la orden en `FAILED` sin tocar al proveedor, y un aviso
+  de éxito tardío no la revive.
+- Se reutiliza la capa de pagos (decisión 16): la recarga solo registra qué hacer
+  cuando su pago se resuelve. Se mantiene el orden de bloqueo de la decisión 29
+  (primero el pago, luego la orden).
+
+## 38. Si el proveedor falla: sin reintentos y con reembolso manual
+
+Si el proveedor rechaza la recarga, o lanza un error o no responde, la orden
+queda `FAILED` y **no se reintenta**: un reintento podría recargar dos veces el
+mismo número. El detalle técnico del error nunca llega al cliente, que ve un
+mensaje genérico.
+
+El pago ya estaba cobrado, así que una orden `FAILED` con pago `SUCCEEDED` es un
+**reembolso pendiente**. No hay reembolso automático: el listado de
+administración la marca como *Reembolsar* y el cliente lee que se revisará su
+reembolso. Un pago que nunca se cobró (falló en la pasarela) no se marca.
+
+**Limitaciones conocidas:**
+- Una orden en `PROCESSING` no se resuelve sola: no hay consulta de estado ni
+  webhook del operador simulado, así que se queda así hasta que alguien actúe.
+- No hay reintentos automáticos ni reembolsos reales.
+- La llamada al proveedor ocurre dentro de la transacción que liquida el pago;
+  con un operador real y lento convendría moverla a una tarea en segundo plano.
+
+## 39. API y pantallas de recargas
+
+- Cada orden se identifica en las URLs por una **referencia UUID**, no por su `id`
+  numérico, para que no se pueda adivinar la de otro cliente. La orden de otro
+  usuario, o una que no existe, responde **404**: su existencia no se revela
+  (decisión 24).
+- Los **contactos recientes** se derivan de las órdenes del propio usuario
+  (números distintos, el más reciente primero, hasta 8); no hay una tabla de
+  contactos aparte.
+- **Solo pasarelas en línea en pantalla** (Stripe, PayPal, Mercado Pago y EnZona,
+  todas simuladas, decisión 16), que es lo que pide la especificación ("pasarelas
+  integradas"). Wise, Zelle y efectivo exigen que el cliente envíe un
+  comprobante, y para recargas no existe esa subida. El servidor sí acepta los
+  métodos manuales: un administrador los confirma desde el admin de Django
+  (decisión 20), pero sin comprobante que revisar.
+- El administrador dispone de un listado de todas las órdenes (filtro por estado,
+  búsqueda por teléfono, correo o referencia, paginación) con el estado de pago,
+  lo que respondió el operador y la marca de reembolso. Como el cliente, ve los
+  cambios por actualización periódica (decisión 31).

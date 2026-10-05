@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CatalogPackage } from '../types/recharges'
-import { contactToInput, discountAmount, groupByKind, outcomeMessage, phoneFromInput } from './recharges'
+import { contactToInput, discountAmount, formatPhone, groupByKind, outcomeMessage, phoneFromInput } from './recharges'
 
 const pkg = (code: string, kind: CatalogPackage['kind']): CatalogPackage => ({
   code, name: code, kind, kind_display: kind, price: '5.00', currency: 'USD', description: '', active_promotion: null,
@@ -97,5 +97,16 @@ describe('discountAmount', () => {
   it('is null for something that cannot be a discount', () => {
     expect(discountAmount('5.00', '6.00')).toBeNull()
     expect(discountAmount('abc', '1.00')).toBeNull()
+  })
+})
+
+describe('formatPhone', () => {
+  it('groups a normalized number in 4 + 4', () => {
+    expect(formatPhone('+5351234567')).toBe('+53 5123 4567')
+  })
+
+  it('leaves anything else as it came', () => {
+    expect(formatPhone('+34612345678')).toBe('+34612345678')
+    expect(formatPhone('')).toBe('')
   })
 })

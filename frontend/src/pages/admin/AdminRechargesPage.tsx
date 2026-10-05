@@ -7,6 +7,7 @@ import RechargeStatusBadge from '../../components/recharges/RechargeStatusBadge'
 import { parseApiError } from '../../lib/apiErrors'
 import { inputClass } from '../../lib/formStyles'
 import { paymentMethodLabel } from '../../lib/paymentMethods'
+import { formatPhone } from '../../lib/recharges'
 import { listAdminRecharges } from '../../services/adminRechargeService'
 import type { RechargeStatus } from '../../types/recharges'
 
@@ -126,7 +127,7 @@ export default function AdminRechargesPage() {
                 <tr key={row.reference} className="hover:bg-slate-50">
                   <td className="px-4 py-3 whitespace-nowrap text-slate-600">{dateTime.format(new Date(row.created_at))}</td>
                   <td className="px-4 py-3 text-slate-900">{row.user_email}</td>
-                  <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">{row.phone_number.replace(/^\+53/, '+53 ')}</td>
+                  <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">{formatPhone(row.phone_number)}</td>
                   <td className="px-4 py-3 text-slate-900">{row.package.name}</td>
                   <td className="px-4 py-3 text-right font-medium"><Money amount={row.amount_total} currency={row.currency} /></td>
                   <td className="px-4 py-3">

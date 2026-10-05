@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import Money from '../components/Money'
 import RechargeStatusBadge from '../components/recharges/RechargeStatusBadge'
 import { parseApiError } from '../lib/apiErrors'
+import { formatPhone } from '../lib/recharges'
 import { listRecharges } from '../services/rechargeService'
 import type { RechargeStatus } from '../types/recharges'
 
@@ -109,7 +110,7 @@ export default function RechargeListPage() {
               {data.results.map((order) => (
                 <tr key={order.reference} className="hover:bg-slate-50">
                   <th scope="row" className="px-4 py-3 font-semibold tabular-nums">
-                    <Link to={`/recharges/${order.reference}`} className="text-blue-700 hover:underline">{order.phone_number.replace(/^\+53/, '+53 ')}</Link>
+                    <Link to={`/recharges/${order.reference}`} className="text-blue-700 hover:underline">{formatPhone(order.phone_number)}</Link>
                   </th>
                   <td className="px-4 py-3 whitespace-nowrap text-slate-600">{dateTime.format(new Date(order.created_at))}</td>
                   <td className="px-4 py-3 text-slate-900">{order.package.name}</td>
