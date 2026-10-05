@@ -26,10 +26,16 @@ export default function MockCheckoutPage() {
   })
 
   // Where to go once settled: the caller may say (?next=), but only inside this app.
-  const fallback = payment?.purpose === 'REMITTANCE' ? '/remittances' : `/membership/result?payment=${reference}`
+  const fallback =
+    payment?.purpose === 'REMITTANCE' ? '/remittances'
+    : payment?.purpose === 'RECHARGE' ? '/recharges'
+    : `/membership/result?payment=${reference}`
   const destination = safeInternalPath(params.get('next'), fallback)
   // Cancelling is not the same as finishing: go back to where the purchase started.
-  const cancelTo = safeInternalPath(params.get('next'), payment?.purpose === 'REMITTANCE' ? '/remittances' : '/membership')
+  const cancelTo = safeInternalPath(
+    params.get('next'),
+    payment?.purpose === 'REMITTANCE' ? '/remittances' : payment?.purpose === 'RECHARGE' ? '/recharges' : '/membership',
+  )
 
   const settle = useMutation({
     mutationFn: (outcome: 'succeeded' | 'failed') => confirmMockPayment(reference, outcome),

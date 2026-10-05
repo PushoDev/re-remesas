@@ -42,26 +42,33 @@ function MethodGroup({ title, icon, note, kind, value, onChange }: GroupProps) {
   )
 }
 
+interface PickerProps {
+  value: PaymentMethodCode
+  onChange: (code: PaymentMethodCode) => void
+  /** Which groups to offer. Recharges only take online gateways: there is no way to attach a proof to them. */
+  kinds?: ('online' | 'manual')[]
+}
+
 /** The seven payment methods in two groups: simulated online gateway, and manual (an administrator confirms). */
-export default function PaymentMethodPicker({ value, onChange }: { value: PaymentMethodCode; onChange: (code: PaymentMethodCode) => void }) {
+export default function PaymentMethodPicker({ value, onChange, kinds = ['online', 'manual'] }: PickerProps) {
   return (
     <div className="space-y-4">
-      <MethodGroup
+      {kinds.includes('online') && <MethodGroup
         title="Pago en línea"
         icon={<CreditCard className="size-4" aria-hidden />}
         note="Se procesa en una pasarela de pruebas: en esta versión de demostración no se cobra nada."
         kind="online"
         value={value}
         onChange={onChange}
-      />
-      <MethodGroup
+      />}
+      {kinds.includes('manual') && <MethodGroup
         title="Pago manual"
         icon={<Banknote className="size-4" aria-hidden />}
         note="Pagas por fuera y un administrador verifica tu comprobante."
         kind="manual"
         value={value}
         onChange={onChange}
-      />
+      />}
     </div>
   )
 }

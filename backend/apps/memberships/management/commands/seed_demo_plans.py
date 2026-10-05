@@ -1,9 +1,36 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
-from apps.memberships.models import MembershipPlan
+from apps.memberships.models import MembershipPlan, Subscription
+from apps.payments.models import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+from apps.users.models import User
+
+DEMO_VIP_EMAIL = 'vip@rere.test'
+
+
+def ensure_demo_vip_subscription(plan: MembershipPlan) -> bool:
+    """Give the demo VIP the purchase a real VIP would have, so the plan's benefits (recharge discount)
+    apply to them. Without it they would be VIP only on the profile and get no discount. Returns True if created."""
+    user = User.objects.filter(email=DEMO_VIP_EMAIL).first()
+    now = timezone.now()
+    if user is None or user.profile.membership_status != 'VIP':
+        return False
+    if Subscription.objects.filter(user=user, status=Subscription.Status.ACTIVE, expires_at__gt=now).exists():
+        return False
+    payment = Payment.objects.create(
+        user=user, purpose=PaymentPurpose.MEMBERSHIP, method=PaymentMethod.CASH, provider='MANUAL',
+        amount=plan.price, currency=plan.currency, status=PaymentStatus.SUCCEEDED, confirmed_at=now,
+    )
+    Subscription.objects.create(
+        user=user, plan=plan, payment=payment, status=Subscription.Status.ACTIVE, duration_days=plan.duration_days,
+        recharge_discount_percent=plan.recharge_discount_percent, starts_at=now,
+        expires_at=user.profile.membership_expires_at or now + timedelta(days=plan.duration_days),
+    )
+    return True
 
 
 def benefits(discount: Decimal, extra: str) -> list[str]:
@@ -48,4 +75,7 @@ class Command(BaseCommand):
                 f'{"creado      " if created else "restablecido"}  {plan.name:<12} '
                 f'{plan.price} {plan.currency} / {plan.duration_days} días · recargas -{plan.recharge_discount_percent:g} %'
             )
+        monthly = MembershipPlan.objects.get(code='vip-mensual')
+        if ensure_demo_vip_subscription(monthly):
+            self.stdout.write(f'creada       suscripción de {DEMO_VIP_EMAIL} al plan {monthly.name} (descuento en recargas)')
         self.stdout.write(self.style.WARNING('Planes de demostración: los precios son de ejemplo.'))

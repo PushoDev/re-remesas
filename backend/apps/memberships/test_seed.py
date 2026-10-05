@@ -73,3 +73,26 @@ def test_seed_demo_data_loads_users_rates_and_plans():
     assert User.objects.count() == 4
     assert ExchangeRate.objects.count() == 2
     assert MembershipPlan.objects.count() == 2
+
+
+def test_the_demo_vip_gets_a_real_subscription_so_the_recharge_discount_applies():
+    from apps.recharges.models import RechargePackage
+    from apps.recharges.services import quote_recharge
+
+    call_command('seed_demo_data')
+    vip = User.objects.get(email='vip@rere.test')
+    package = RechargePackage.objects.get(code='saldo-10')
+
+    quote = quote_recharge(vip, package, '+53 5123 4567')
+
+    assert (quote.discount_percent, quote.amount_total) == (Decimal('5.00'), Decimal('9.50'))
+
+
+def test_only_the_active_demo_vip_gets_one_and_running_it_twice_adds_none():
+    from .models import Subscription
+
+    call_command('seed_demo_data')
+    call_command('seed_demo_data')
+
+    assert Subscription.objects.count() == 1
+    assert Subscription.objects.get().user.email == 'vip@rere.test'

@@ -63,7 +63,7 @@ export default function AdminOverviewPage() {
       <section aria-labelledby="others-title" className="space-y-3">
         <h2 id="others-title" className="text-lg font-semibold text-slate-900">Otros</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Card label="Órdenes de recarga" value={data.recharge_orders.total} hint="Se activan con el módulo de recargas." />
+          <Card label="Órdenes de recarga" value={data.recharge_orders.total} to="/admin/recharges" />
           <Card label="Membresías VIP activas" value={data.memberships.active_vip}
             hint={<span className="inline-flex items-center gap-1"><BadgeCheck className="size-3.5" aria-hidden /> Vigentes, sin vencer.</span>} />
         </div>

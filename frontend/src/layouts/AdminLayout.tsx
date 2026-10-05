@@ -5,7 +5,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'border-blue-700 text-blue-800' : 'border-transparent text-slate-500 hover:text-slate-800'
   }`
 
-/** Frame of the administration area. More tabs (remittances, recharges...) will be added here. */
+/** Frame of the administration area. */
 export default function AdminLayout() {
   return (
     <div className="space-y-6">
@@ -17,6 +17,9 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/remittances" className={tabClass}>
             Remesas
+          </NavLink>
+          <NavLink to="/admin/recharges" className={tabClass}>
+            Recargas
           </NavLink>
           <NavLink to="/admin/exchange-rates" className={tabClass}>
             Tasas de cambio

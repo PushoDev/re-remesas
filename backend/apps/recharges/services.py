@@ -2,6 +2,7 @@
 
 The server decides which promotion is current; the browser only draws what it is given.
 """
+import logging
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -16,6 +17,10 @@ from apps.payments.providers.base import PaymentSession
 from apps.payments.providers.registry import provider_for_method
 
 from .models import Promotion, RechargeOrder, RechargePackage
+from .providers.base import ProviderOutcome
+from .providers.registry import get_provider
+
+logger = logging.getLogger(__name__)
 
 MONEY = Decimal('0.01')
 HUNDRED = Decimal('100')
@@ -145,3 +150,55 @@ def create_recharge_order(user, *, package: RechargePackage, phone_number: str,
     payment.target_id = order.pk
     payment.save(update_fields=['external_reference', 'instructions', 'target_id', 'updated_at'])
     return order, session
+
+
+# --- After the payment (registered in apps.py) -------------------------------------------------------
+
+OUTCOME_TO_STATUS = {
+    ProviderOutcome.SUCCESS: RechargeOrder.Status.SUCCESS,
+    ProviderOutcome.PROCESSING: RechargeOrder.Status.PROCESSING,
+    ProviderOutcome.FAILED: RechargeOrder.Status.FAILED,
+}
+PROVIDER_UNREACHABLE = 'El operador no pudo completar la recarga.'
+
+
+@transaction.atomic
+def process_paid_order(order: RechargeOrder) -> RechargeOrder:
+    """The order's payment was confirmed: ask the provider for the top-up, once.
+
+    Only an order still waiting for its payment is sent; the row is locked, so the same order
+    can never be sent twice, however many times the confirmation arrives. If the provider fails
+    or cannot be reached the order is FAILED, never retried here: retrying could top up twice.
+    The money was taken, so a FAILED order with a SUCCEEDED payment is refunded by hand.
+    """
+    locked = RechargeOrder.objects.select_for_update().select_related('package').get(pk=order.pk)
+    if locked.status != RechargeOrder.Status.PENDING_PAYMENT:
+        return locked
+
+    try:
+        result = get_provider().recharge(locked.phone_number, locked.package.code, locked.amount_total)
+        locked.status = OUTCOME_TO_STATUS[result.status]
+        locked.provider_reference = result.provider_reference
+        locked.provider_message = result.message
+    except Exception:
+        logger.exception('Recharge provider failed for order %s', locked.reference)
+        locked.status = RechargeOrder.Status.FAILED
+        locked.provider_message = PROVIDER_UNREACHABLE
+    locked.save(update_fields=['status', 'provider_reference', 'provider_message', 'updated_at'])
+    return locked
+
+
+def mark_order_paid(payment) -> None:
+    """Payment handler: the payment was confirmed (gateway webhook, or an administrator)."""
+    order = RechargeOrder.objects.filter(payment=payment).first()
+    if order is not None:
+        process_paid_order(order)
+
+
+def fail_order_after_failed_payment(payment) -> None:
+    """Payment handler: a payment that failed ends the order; the provider is never called."""
+    order = RechargeOrder.objects.select_for_update().filter(payment=payment).first()
+    if order is not None and order.status == RechargeOrder.Status.PENDING_PAYMENT:
+        order.status = RechargeOrder.Status.FAILED
+        order.provider_message = 'El pago no se completó.'
+        order.save(update_fields=['status', 'provider_message', 'updated_at'])
